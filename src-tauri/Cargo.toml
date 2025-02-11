@@ -1,0 +1,40 @@
+[package]
+name = "pi-aier"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "pi_aier_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tokio = { version = "1.43.0", features = ["rt", "macros"] }
+tauri = { version = "2.2.2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dotenvy = "0.15.7"
+sea-orm = { version = "1.1.4", features = [
+  "sqlx-sqlite",
+  "runtime-tokio-native-tls",
+  "macros",
+] }
+sqlx-sqlite = "0.8.3"
+uuid = { version = "1.11.1", features = ["v4", "serde"] }
+reqwest = "0.12.12"
+toml = "0.8.19"
+actix-web = "4"
+tauri-plugin-dialog = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
