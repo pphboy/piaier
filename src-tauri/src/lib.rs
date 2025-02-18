@@ -2,7 +2,9 @@ use std::{
     collections::HashMap,
     env,
     error::Error,
+    io::Write,
     path::PathBuf,
+    process::Command,
     sync::{Arc, Mutex},
     time::Instant,
     vec,
@@ -31,6 +33,7 @@ use tauri::{
     WebviewWindowBuilder,
 };
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tempfile::NamedTempFile;
 
 static mut DB: Option<DatabaseConnection> = None;
 static mut GPT_CONFIG: Option<gpt::GptConfig> = None;
@@ -266,17 +269,221 @@ async fn save_dbmsg(message: message::Model) {
 
 async fn handle_normal_prompter(
     prompter: prompter::Model,
-    message: message::Model,
+    message_item: message::Model,
 ) -> Result<String, String> {
+    let messages = get_messages(message_item.session_uuid.clone())
+        .await
+        .unwrap();
+
+    let mut gpt_messages = vec![];
+
+    gpt_messages.push(gpt::GptMessage {
+        role: "system".to_string(),
+        content: "every things return markdown syntax".to_string(),
+    });
+
+    if messages.len() == 0 {
+        // save system
+        unsafe {
+            let db = DB.clone().unwrap();
+            save(
+                &db,
+                message::Model {
+                    id: 0,
+                    session_uuid: message_item.session_uuid.clone(),
+                    order: 0,
+                    content: prompter.content.clone(),
+                    itype: ienum::MessageType::SYSTEM.to_string(),
+                },
+            )
+            .await
+            .unwrap();
+        }
+
+        gpt_messages.push(gpt::GptMessage {
+            role: ienum::MessageType::SYSTEM.to_string(),
+            content: prompter.content.clone(),
+        });
+        gpt_messages.push(gpt::GptMessage {
+            role: ienum::MessageType::USER.to_string(),
+            content: message_item.content.clone(),
+        });
+    }
+
+    messages.iter().for_each(|m| {
+        gpt_messages.push(gpt::GptMessage {
+            role: m.itype.clone(),
+            content: m.content.clone(),
+        });
+    });
+    unsafe {
+        let db = DB.clone().unwrap();
+        message::save(&db, message_item.clone()).await.unwrap();
+        db.close();
+    }
+
+    gpt_messages.push(gpt::GptMessage {
+        role: ienum::MessageType::USER.to_string(),
+        content: message_item.content.clone(),
+    });
+
+    // 需要区分模型类型
+    let assistant_message = gpt::call_gpt(
+        get_config()
+            .models
+            .iter()
+            .find(|m| m.model == prompter.model_name)
+            .unwrap()
+            .clone(),
+        &gpt_messages,
+    )
+    .await
+    .unwrap();
+
+    unsafe {
+        let db = DB.clone().unwrap();
+        message::save(
+            &db,
+            message::Model {
+                id: 0,
+                session_uuid: message_item.session_uuid.clone(),
+                order: messages.len() as i32 + 1,
+                content: assistant_message,
+                itype: ienum::MessageType::ASSISTANT.to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        db.close();
+    }
+
     Ok("".to_string())
+
+    // 拿prompter
+    // 将prompter作为SYSTEM传入
+    // 将message作为USER传入
+    // 调用gpt
+    // 将gpt返回的message作为ASSISTANT传入
 }
 
 #[tauri::command]
 async fn handle_pyscript_prompter(
     prompter: prompter::Model,
-    message: message::Model,
+    message_item: message::Model,
+    bind_code: bool,
 ) -> Result<String, String> {
+    let messages = get_messages(message_item.session_uuid.clone())
+        .await
+        .unwrap();
+
+    let mut gpt_messages = vec![];
+
+    gpt_messages.push(gpt::GptMessage {
+        role: "system".to_string(),
+        content: "just return python3 code,python3 just local run".to_string(),
+    });
+
+    // 加载 system promtper
+    gpt_messages.push(gpt::GptMessage {
+        role: ienum::MessageType::SYSTEM.to_string(),
+        content: prompter.content.clone(),
+    });
+    gpt_messages.push(gpt::GptMessage {
+        role: ienum::MessageType::USER.to_string(),
+        content: message_item.content.clone(),
+    });
+
+    unsafe {
+        let db = DB.clone().unwrap();
+        message::save(&db, message_item.clone()).await.unwrap();
+        db.close();
+    }
+
+    gpt_messages.push(gpt::GptMessage {
+        role: ienum::MessageType::USER.to_string(),
+        content: message_item.content.clone(),
+    });
+
+    let mut python_code = gpt::call_gpt(
+        get_config()
+            .models
+            .iter()
+            .find(|m| m.model == prompter.model_name)
+            .unwrap()
+            .clone(),
+        &gpt_messages,
+    )
+    .await
+    .unwrap();
+
+    let temp_file = tempfile::Builder::new()
+        .prefix("rust_python_") // 指定前缀
+        .tempfile_in("/tmp") // 指定目录为 /tmp
+        .expect("Failed to create a temporary file");
+
+    // 获取临时文件的路径
+    let temp_path = temp_file.path();
+
+    // 将 Python 代码写入临时文件
+    {
+        let mut temp_file = temp_file.reopen().expect("Failed to reopen temporary file");
+        temp_file
+            .write_all(python_code.as_bytes())
+            .expect("Failed to write to temporary file");
+    }
+
+    println!("python3 tmp file: {}", temp_path.display());
+
+    let output = Command::new("python3")
+        .arg(temp_path)
+        .output()
+        .expect("Failed to execute python3");
+
+    // 执行python3代码
+    if output.status.success() {
+        println!("Output: {}", String::from_utf8_lossy(&output.stdout));
+        if bind_code {
+            python_code = format!(
+                "python code\n```python\n{}\n```\n>{}\n",
+                python_code,
+                String::from_utf8_lossy(&output.stdout)
+            );
+        } else {
+            python_code = String::from_utf8_lossy(&output.stdout).to_string();
+        }
+    } else {
+        // 失败就返回代码和错误的结果
+        python_code = format!(
+            "err py3 code\n\n```python\n{}\n```\n```\n{}\n```\n",
+            python_code,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    unsafe {
+        let db = DB.clone().unwrap();
+        message::save(
+            &db,
+            message::Model {
+                id: 0,
+                session_uuid: message_item.session_uuid.clone(),
+                order: messages.len() as i32 + 1,
+                content: python_code,
+                itype: ienum::MessageType::ASSISTANT.to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        db.close();
+    }
+
     Ok("".to_string())
+
+    // 拿prompter
+    // 将prompter作为SYSTEM传入
+    // 将message作为USER传入
+    // 调用gpt
+    // 将gpt返回的message作为ASSISTANT传入
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

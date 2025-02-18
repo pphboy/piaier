@@ -45,12 +45,12 @@ export async function saveMessage(prompter: Prompter, message: AierMessage, chan
     nodes: JSON.stringify(prompter.nodes),
     edges: JSON.stringify(prompter.edges)
   }
-  console.log("prompter", prompter)
+  console.log("prompter", prompter, "message", message, prompter.ptype)
   switch (prompter.ptype) {
     case PrompterType.CHAT:
       return await invoke('save_message', { prompter: transPrompter, messageItem: message })
     case PrompterType.PY_SCRIPT:
-      return await invoke('handle_pyscript_prompter', { prompter: transPrompter, messageItem: message })
+      return await invoke('handle_pyscript_prompter', { prompter: transPrompter, messageItem: message, bindCode: true })
     case PrompterType.MULTI_MODELS:
       if (!channel) {
         channel = new Channel()

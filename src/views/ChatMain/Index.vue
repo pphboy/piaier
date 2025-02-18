@@ -117,6 +117,7 @@ async function send() {
     console.log("messages", messages.value)
     sendingMsg.value.content = ""
   } catch (error) {
+    console.error(error)
     ElMessage.error("Send message failed")
   } finally {
     loading.value = false
@@ -190,7 +191,7 @@ async function newSession() {
               <div class="nes-select">
                 <select required id="history_select" v-model="usingSession">
                   <option :value="usingSession" disabled selected hidden>Choose History</option>
-                  <option v-for=" s in sessions" :key="s.uuid" :value="s">{{ s.session_title }}</option>
+                  <option v-for="s in sessions" :key="s.uuid" :value="s">{{ s.session_title }}</option>
                 </select>
               </div>
             </el-col>
@@ -205,7 +206,7 @@ async function newSession() {
       <el-col :span="24">
         <el-row>
           <el-col :span="24">
-            <section class="nes-container" style="height: 73vh;overflow-y: auto;">
+            <section class="nes-container" style="min-height: 62vh;overflow-y: auto;">
               <section class="message-list">
                 <Message v-if="!usingSession.uuid" message="New Session" direction="left"></Message>
                 <div v-for="(m, key) in messages" :key="key">
@@ -215,7 +216,7 @@ async function newSession() {
               </section>
             </section>
           </el-col>
-          <div style="height: 73vh;position:absolute;right: 10px;">
+          <div style="height: 62vh;position:absolute;right: 10px;">
             <el-steps direction="vertical" :active="steps.length" finish-status="success">
               <el-step v-for="v in steps" :key="v.uuid" :title="nodes.get(v.uuid)?.data.label" />
             </el-steps>

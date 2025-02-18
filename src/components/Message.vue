@@ -72,7 +72,7 @@ onUpdated(() => {
   <div style="display: flex;" :style="css">
     <section class="message ">
       <div class="nes-balloon" :class="dt">
-        <div v-html="messageHtml"></div>
+        <div v-html="messageHtml" style="max-width: 80vw; word-wrap: break-word; overflow-wrap: break-word;"></div>
       </div>
     </section>
   </div>
