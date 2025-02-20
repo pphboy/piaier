@@ -107,7 +107,7 @@ refresh()
           </div>
         </el-col>
         <el-col :span="24" v-if="[PrompterType.CHAT, PrompterType.PY_SCRIPT].includes(editPrompter.ptype)">
-          <Chat :editPrompter="editPrompter" />
+          <Chat :editPrompter="editPrompter" :key="editPrompter.uuid" />
         </el-col>
         <el-col :span="24" v-if="editPrompter.ptype === PrompterType.MULTI_MODELS">
           <MultiPrompt v-model:edges_lines="editPrompter.edges" v-model:nodes="editPrompter.nodes" />

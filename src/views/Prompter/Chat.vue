@@ -17,9 +17,12 @@ const editPrompter = ref(props.editPrompter)
 
 watch(props.editPrompter, () => {
   editPrompter.value = props.editPrompter
+  console.log(editPrompter.value)
   refresh()
 })
 
+
+console.log(editPrompter.value)
 
 refresh()
 
