@@ -206,7 +206,7 @@ async function newSession() {
       <el-col :span="24">
         <el-row>
           <el-col :span="24">
-            <section class="nes-container" style="min-height: 62vh;overflow-y: auto;">
+            <section class="nes-container" style="height:calc( 100vh - 295px);overflow-y: auto;">
               <section class="message-list">
                 <Message v-if="!usingSession.uuid" message="New Session" direction="left"></Message>
                 <div v-for="(m, key) in messages" :key="key">
@@ -216,7 +216,7 @@ async function newSession() {
               </section>
             </section>
           </el-col>
-          <div style="height: 62vh;position:absolute;right: 10px;">
+          <div style="height:calc( 100vh - 295px);position:absolute;right: 10px;">
             <el-steps direction="vertical" :active="steps.length" finish-status="success">
               <el-step v-for="v in steps" :key="v.uuid" :title="nodes.get(v.uuid)?.data.label" />
             </el-steps>
